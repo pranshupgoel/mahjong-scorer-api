@@ -20,6 +20,7 @@ fsspec>=2024.2
 # Detector (YOLO)
 ultralytics>=8.2
 tqdm>=4.66
+pandas>=2.0
 
 # API layer
 fastapi>=0.110
