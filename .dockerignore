@@ -1,0 +1,11 @@
+Datasets/
+*.tar.gz
+*.tar
+*.zip
+zi9PhZ59
+tar.log
+__pycache__/
+*.pyc
+.git/
+node_modules/
+mobile/node_modules/
