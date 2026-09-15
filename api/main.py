@@ -122,9 +122,13 @@ async def detect(image: UploadFile = File(...)) -> DetectResponse:
             width, height = im.size
 
         detections = _detector.detect_with_boxes(str(tmp_path))
+        crops = [crop for _bbox, crop in detections]
+        # Classify all detected tiles in a single batched forward pass rather
+        # than one model call per tile -- much faster on CPU, which matters a
+        # lot on a resource-constrained host.
+        all_alternatives = _classifier.predict_topk_batch(crops, k=3)
         tiles: list[TileDetection] = []
-        for bbox, crop in detections:
-            alternatives = _classifier.predict_topk(crop, k=3)
+        for (bbox, _crop), alternatives in zip(detections, all_alternatives):
             best_label, best_conf = alternatives[0]
             tiles.append(
                 TileDetection(

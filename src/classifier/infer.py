@@ -36,3 +36,20 @@ class TileClassifier:
         probs = torch.softmax(self.model(x), dim=1)[0]
         top = torch.topk(probs, k)
         return [(self.classes[i], float(p)) for p, i in zip(top.values, top.indices)]
+
+    @torch.no_grad()
+    def predict_topk_batch(self, crops: list[Image.Image], k: int = 3) -> list[list[tuple[str, float]]]:
+        """Same as predict_topk but for many crops in a single forward pass.
+        On CPU (especially the very limited CPU of a free-tier host) this is
+        dramatically faster than calling predict_topk in a loop -- one hand
+        photo can have 15+ tiles, and per-call Python/PyTorch overhead adds
+        up fast when each tile is its own separate forward pass."""
+        if not crops:
+            return []
+        batch = torch.stack([self.transform(c.convert("RGB")) for c in crops]).to(self.device)
+        probs = torch.softmax(self.model(batch), dim=1)
+        top = torch.topk(probs, k, dim=1)
+        results: list[list[tuple[str, float]]] = []
+        for row_values, row_indices in zip(top.values, top.indices):
+            results.append([(self.classes[i], float(p)) for p, i in zip(row_values, row_indices)])
+        return results
