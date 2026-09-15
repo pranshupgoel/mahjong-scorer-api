@@ -1,15 +1,23 @@
-# Core pipeline deps (superset of requirements.txt). torch/torchvision are
-# installed separately in the Dockerfile from the CPU-only wheel index --
-# do NOT add them here, or pip pulls the ~2GB CUDA build (Render's free
-# tier has neither the RAM nor the disk for that, and we don't need a GPU
-# for CPU inference of a MobileNetV3-Small classifier + YOLO detector).
+# Core pipeline deps (superset of requirements.txt). torch/torchvision
+# themselves are installed separately in the Dockerfile (--no-deps, from
+# the CPU-only wheel index) -- do NOT add them here, or pip pulls the
+# ~2GB CUDA build. Their own runtime dependencies (below, up to
+# ultralytics) ARE listed here since they're plain Python packages with no
+# GPU/CPU variant distinction, safe to resolve from normal PyPI.
 numpy>=1.26
 pillow>=10.0
 pyyaml>=6.0
 
-# Detector (YOLO) -- pulls in its own torch/torchvision requirement, but
-# since we install the CPU wheels first (Dockerfile), pip finds them
-# already satisfied and won't reinstall the CUDA build.
+# torch/torchvision's runtime deps (normally auto-installed, but we used
+# --no-deps for them above -- see Dockerfile comment)
+filelock>=3.13
+typing-extensions>=4.10
+sympy>=1.13
+networkx>=2.8
+jinja2>=3.1
+fsspec>=2024.2
+
+# Detector (YOLO)
 ultralytics>=8.2
 tqdm>=4.66
 

@@ -12,11 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # CPU-only torch/torchvision FIRST, from PyTorch's own CPU wheel index --
 # the default PyPI wheels pull ~2GB of CUDA packages we don't need and
-# won't fit on a free-tier host. Installing these first means the later
-# `pip install -r requirements-api.txt` (which pulls in ultralytics, whose
-# own torch dependency would otherwise resolve to the CUDA build) finds
-# torch/torchvision already satisfied and leaves them alone.
-RUN pip install --no-cache-dir torch==2.4.1 torchvision==0.19.1 \
+# won't fit on a free-tier host. --no-deps + a single-purpose index here is
+# deliberate: pytorch.org's /whl/cpu index only mirrors torch/torchvision
+# themselves, not the full PyPI catalog, so asking it to also resolve their
+# transitive deps (typing-extensions, sympy, etc.) fails to build some of
+# them from source. Those deps are plain, GPU-agnostic Python packages, so
+# they're installed normally from PyPI via requirements-api.txt instead
+# (torch-runtime-deps.txt below).
+RUN pip install --no-cache-dir --no-deps torch==2.4.1 torchvision==0.19.1 \
     --index-url https://download.pytorch.org/whl/cpu
 
 COPY requirements-api.txt .
