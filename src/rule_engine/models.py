@@ -216,7 +216,7 @@ class WaitType(str, Enum):
 class WinContext:
     """
     Everything the engine needs that ISN'T visually inferable from a photo of
-    the tiles -- per Pranshu's call, the app should prompt the user directly
+    the tiles -- the app should prompt the user directly
     for these on a short questionnaire rather than trying to track full
     game state automatically.
     """

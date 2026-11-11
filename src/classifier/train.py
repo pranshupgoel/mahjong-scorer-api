@@ -13,7 +13,7 @@ size to a dataset this small. Run src/classifier/evaluate.py on the held-out
 test split once training finishes -- val accuracy on ~1-2 images/class is
 too noisy to trust by itself.
 
-See README.md "On-device inference" for the follow-up work (quantization /
+See README.md "Roadmap" for the follow-up work (quantization /
 export to TFLite or Core ML) once accuracy is validated.
 
 Usage:

@@ -1,8 +1,7 @@
 """
-Core Taiwanese Mahjong scoring ruleset, per the source guide extracted into
-the project doc `taiwanese-mahjong-scoring-reference.md`.
+Core Taiwanese Mahjong scoring ruleset, per a Taiwanese Mahjong scoring guide.
 
-Design decisions confirmed with Pranshu (2026-09-15):
+Design decisions:
   - Tiered categories (Win within 4/7/10 tiles, etc.): take the single best
     matching tier, never stack multiple tiers of the same family.
   - Bonus stacking across DIFFERENT categories (e.g. per-pong Wind points vs
@@ -15,8 +14,7 @@ Design decisions confirmed with Pranshu (2026-09-15):
     WinContext, which the app should populate via a short user questionnaire
     -- not auto-tracked game state.
 
-KNOWN LIMITATIONS (flagged rather than silently guessed -- see the project
-doc's "Known ambiguous stacking cases" section and confirm before shipping):
+KNOWN LIMITATIONS (flagged rather than silently guessed):
   - "Four in 2/3/4 ways" is NOT implemented. Correctly detecting it requires
     enumerating every alternate valid meld-grouping of the same tiles, which
     the decomposition engine *can* surface (see engine.py) but scoring it

@@ -13,13 +13,13 @@ Two endpoints:
 Model weights are loaded once at startup (not per-request) from
 DETECTOR_WEIGHTS / CLASSIFIER_CKPT env vars, defaulting to
 checkpoints/detector_best.pt and checkpoints/classifier.pt relative to the
-repo root -- see claude/mahjong-pipeline-status.md for where those come
-from (trained on sirlserver03, scp'd down manually).
+repo root -- these are the weights produced by src.detector.train and
+src.classifier.train.
 
 Run locally:
     uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
-Deployed on Hugging Face Spaces (Docker SDK), see Dockerfile in repo root.
+Docker-ready (see Dockerfile in repo root); deployable to Hugging Face Spaces or Render.
 """
 from __future__ import annotations
 
