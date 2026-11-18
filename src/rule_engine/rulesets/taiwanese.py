@@ -1,7 +1,8 @@
 """
-Core Taiwanese Mahjong scoring ruleset, per a Taiwanese Mahjong scoring guide.
+Core Taiwanese Mahjong scoring ruleset, per the source guide extracted into
+the project doc `taiwanese-mahjong-scoring-reference.md`.
 
-Design decisions:
+Design decisions confirmed with Pranshu (2026-09-15):
   - Tiered categories (Win within 4/7/10 tiles, etc.): take the single best
     matching tier, never stack multiple tiers of the same family.
   - Bonus stacking across DIFFERENT categories (e.g. per-pong Wind points vs
@@ -14,7 +15,8 @@ Design decisions:
     WinContext, which the app should populate via a short user questionnaire
     -- not auto-tracked game state.
 
-KNOWN LIMITATIONS (flagged rather than silently guessed):
+KNOWN LIMITATIONS (flagged rather than silently guessed -- see the project
+doc's "Known ambiguous stacking cases" section and confirm before shipping):
   - "Four in 2/3/4 ways" is NOT implemented. Correctly detecting it requires
     enumerating every alternate valid meld-grouping of the same tiles, which
     the decomposition engine *can* surface (see engine.py) but scoring it
@@ -431,6 +433,65 @@ def _score_waiting(context: WinContext) -> list[ScoreLine]:
     return [ScoreLine("waiting", label, 2)] if label else []
 
 
+# -- Table-context rules (scoring reference sections 0, 19 and 23) ---------------
+#
+# Dealer win streak: the guide gives +3 / +5 / +7 for 1 / 2 / 3 consecutive
+# East wins and lowers the declare threshold from 20 to 17 / 15 / 13 for the
+# same streaks. We read `dealer_win_streak` as the number of consecutive wins
+# the dealer ALREADY has before this hand (what the Dealer Die shows). The guide
+# covers streaks up to 3; a longer streak is treated as 3 and noted. The guide
+# also says the threshold "reduces each round" for South/West/North, without
+# numbers -- NOT implemented, deliberately not guessed.
+_BASE_DECLARE_THRESHOLD = 20
+_DEALER_STREAK_BONUS = {1: 3, 2: 5, 3: 7}
+_DEALER_STREAK_THRESHOLD = {1: 17, 2: 15, 3: 13}
+_MAX_DEALER_STREAK = 3
+
+
+def _dealer_streak_level(context: WinContext) -> int:
+    if not context.is_dealer or context.dealer_win_streak <= 0:
+        return 0
+    return min(context.dealer_win_streak, _MAX_DEALER_STREAK)
+
+
+def declare_threshold_for(context: WinContext) -> int:
+    """Points needed to declare Mahjong for this context (20, or 17/15/13 for a dealer on a streak)."""
+    return _DEALER_STREAK_THRESHOLD.get(_dealer_streak_level(context), _BASE_DECLARE_THRESHOLD)
+
+
+def _closing_hand_applies(context: WinContext) -> bool:
+    """Calling/Closing Hand only exists in the West and North rounds per the guide."""
+    return context.closed_hand_declared and context.round_wind in ("W", "N")
+
+
+def _score_table_bonuses(context: WinContext) -> list[ScoreLine]:
+    """Bonuses that come from the table situation, not from the tiles. They are
+    added after the tile scoring and kept out of the Chicken Hand check."""
+    lines: list[ScoreLine] = []
+    level = _dealer_streak_level(context)
+    if level:
+        lines.append(ScoreLine("winning_tile", f"Dealer win streak ({level} in a row)", _DEALER_STREAK_BONUS[level]))
+    if _closing_hand_applies(context):
+        lines.append(ScoreLine("winning_tile", "Closing Hand (West/North round)", 5))
+    return lines
+
+
+def _context_notes(context: WinContext) -> list[str]:
+    notes: list[str] = []
+    if context.is_dealer and context.dealer_win_streak > _MAX_DEALER_STREAK:
+        notes.append(
+            f"Dealer win streak of {context.dealer_win_streak} is treated as {_MAX_DEALER_STREAK}: "
+            "the scoring guide only covers streaks up to 3."
+        )
+    if context.closed_hand_declared and not _closing_hand_applies(context):
+        notes.append("Closing Hand was declared but only scores in the West and North rounds, so it was ignored.")
+    if context.winning_tile_from_east_discard and (context.self_draw or context.is_dealer):
+        notes.append(
+            "'East discarded the winning tile' was ignored: it only applies to a win off a discard by a non-dealer winner."
+        )
+    return notes
+
+
 def _score_winning_tile(melds: list[Meld], context: WinContext, force_concealed: Optional[bool] = None) -> list[ScoreLine]:
     lines = []
     if force_concealed is not None:
@@ -444,6 +505,12 @@ def _score_winning_tile(melds: list[Meld], context: WinContext, force_concealed:
 
     if context.is_dealer:
         lines.append(ScoreLine("winning_tile", "East Seat/Dealer tile", 1))
+    elif context.winning_tile_from_east_discard and not context.self_draw:
+        lines.append(ScoreLine("winning_tile", "East Seat/Dealer tile (East discarded the winning tile)", 1))
+
+    # Guide: closing a fully-exposed hand forfeits the 10/15 Fully Exposed points
+    # and earns only the +5 Closing Hand bonus (added in _score_table_bonuses).
+    fully_exposed_counts = is_fully_exposed_hand and not _closing_hand_applies(context)
 
     if context.self_draw:
         lines.append(ScoreLine("winning_tile", "Self-Draw from the Wall", 1))
@@ -451,12 +518,12 @@ def _score_winning_tile(melds: list[Meld], context: WinContext, force_concealed:
             lines.append(ScoreLine("winning_tile", "Self-Draw from the Flower Wall", 5))
         if is_concealed_hand:
             lines.append(ScoreLine("winning_tile", "Self-Draw with a Concealed Hand", 10))
-        if is_fully_exposed_hand:
+        if fully_exposed_counts:
             lines.append(ScoreLine("winning_tile", "Self-Draw in a Fully Exposed Hand", 10))
     else:
         if is_concealed_hand:
             lines.append(ScoreLine("winning_tile", "Concealed Hand (win from Discard)", 5))
-        if is_fully_exposed_hand:
+        if fully_exposed_counts:
             lines.append(ScoreLine("winning_tile", "Fully Exposed Hand (win from Discard)", 15))
 
     if context.win_from_robbing_gong:
@@ -513,7 +580,14 @@ class TaiwaneseRuleset:
     name = "taiwanese"
 
     def score(self, hand: HandInput, context: WinContext) -> ScoreResult:
+        result = self._score_impl(hand, context)
+        result.declare_threshold = declare_threshold_for(context)
+        result.notes = list(result.notes) + _context_notes(context)
+        return result
+
+    def _score_impl(self, hand: HandInput, context: WinContext) -> ScoreResult:
         flowers = hand.flowers
+        bonus_lines = _score_table_bonuses(context)
 
         # -- 7-Flowers / 8-Flowers instant self-draw win overrides everything --
         if len(flowers) >= 8:
@@ -537,6 +611,7 @@ class TaiwaneseRuleset:
                     + _score_flowers(flowers, context)
                     + _score_waiting(context)
                     + _score_winning_tile([], context, force_concealed=True)
+                    + bonus_lines
                     + [_BASE_POINT]
                 )
                 return ScoreResult(total_points=sum(l.points for l in lines), lines=lines, is_special_hand="Nico Nico")
@@ -548,6 +623,7 @@ class TaiwaneseRuleset:
                     + _score_flowers(flowers, context)
                     + _score_waiting(context)
                     + _score_winning_tile([], context, force_concealed=True)
+                    + bonus_lines
                     + [_BASE_POINT]
                 )
                 return ScoreResult(total_points=sum(l.points for l in lines), lines=lines, is_special_hand="13 Orphans")
@@ -559,6 +635,7 @@ class TaiwaneseRuleset:
                     + _score_flowers(flowers, context)
                     + _score_waiting(context)
                     + _score_winning_tile([], context, force_concealed=True)
+                    + bonus_lines
                     + [_BASE_POINT]
                 )
                 return ScoreResult(total_points=sum(l.points for l in lines), lines=lines, is_special_hand="16 Orphans")
@@ -596,9 +673,10 @@ class TaiwaneseRuleset:
         #    the Base Point gets a flat 20 instead. --
         pre_base_total = sum(l.points for l in best_lines)
         if pre_base_total == 1:
+            chicken_lines = [ScoreLine("special", "Chicken Hand", 20)] + bonus_lines + [_BASE_POINT]
             return ScoreResult(
-                total_points=25,
-                lines=[ScoreLine("special", "Chicken Hand", 20), _BASE_POINT],
+                total_points=sum(l.points for l in chicken_lines),
+                lines=chicken_lines,
                 is_chicken_hand=True,
                 notes=[
                     f"Raw pre-Base score was {pre_base_total}pt "
@@ -607,5 +685,5 @@ class TaiwaneseRuleset:
                 ],
             )
 
-        final_lines = best_lines + [_BASE_POINT]
+        final_lines = best_lines + bonus_lines + [_BASE_POINT]
         return ScoreResult(total_points=sum(l.points for l in final_lines), lines=final_lines)

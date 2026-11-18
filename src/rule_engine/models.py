@@ -216,7 +216,7 @@ class WaitType(str, Enum):
 class WinContext:
     """
     Everything the engine needs that ISN'T visually inferable from a photo of
-    the tiles -- the app should prompt the user directly
+    the tiles -- per Pranshu's call, the app should prompt the user directly
     for these on a short questionnaire rather than trying to track full
     game state automatically.
     """
@@ -234,7 +234,8 @@ class WinContext:
     wait_type: WaitType = WaitType.NONE
     closed_hand_declared: bool = False          # "Calling/Closing Hand" (West/North round house rule)
     triple_fan_dice: Optional[int] = None       # 1-6 if dealer broke the wall with a triple, else None
-    dealer_win_streak: int = 0                  # consecutive wins as dealer (Dealer Die), 0 if none/not dealer
+    dealer_win_streak: int = 0                  # consecutive wins the dealer already has (Dealer Die), 0 if none/not dealer
+    winning_tile_from_east_discard: bool = False  # won off a discard by the East player (East Seat tile +1 when East isn't the winner)
 
     @property
     def is_dealer(self) -> bool:
@@ -256,6 +257,7 @@ class ScoreResult:
     is_chicken_hand: bool = False
     ruleset: str = "taiwanese"
     notes: list[str] = field(default_factory=list)
+    declare_threshold: int = 20                 # points needed to declare Mahjong (reduced for a dealer on a win streak)
 
     def breakdown(self) -> str:
         rows = "\n".join(f"  {l.points:>4}  [{l.category}] {l.label}" for l in self.lines)

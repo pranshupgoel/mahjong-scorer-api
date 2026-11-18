@@ -13,13 +13,13 @@ Two endpoints:
 Model weights are loaded once at startup (not per-request) from
 DETECTOR_WEIGHTS / CLASSIFIER_CKPT env vars, defaulting to
 checkpoints/detector_best.pt and checkpoints/classifier.pt relative to the
-repo root -- these are the weights produced by src.detector.train and
-src.classifier.train.
+repo root -- see claude/mahjong-pipeline-status.md for where those come
+from (trained on sirlserver03, scp'd down manually).
 
 Run locally:
     uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
-Docker-ready (see Dockerfile in repo root); deployable to Hugging Face Spaces or Render.
+Deployed on Hugging Face Spaces (Docker SDK), see Dockerfile in repo root.
 """
 from __future__ import annotations
 
@@ -43,9 +43,17 @@ CLASSIFIER_CKPT = os.environ.get("CLASSIFIER_CKPT", str(REPO_ROOT / "checkpoints
 
 app = FastAPI(title="Mahjong Scorer API", version="0.1.0")
 
+# Browser origins allowed to call this API. Set ALLOWED_ORIGINS on the host
+# (Render) to a comma-separated list, e.g.
+#   ALLOWED_ORIGINS=https://your-site.vercel.app,http://localhost:5173
+# Unset (or empty) keeps the old behaviour (any origin), so deploying this code
+# changes nothing until the variable is set. The API has no auth and no cookies,
+# so "*" is safe functionally; restricting just stops other sites using it.
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # demo/testing phase -- the app has no auth yet, tighten before real release
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -165,6 +173,7 @@ class WinContextPayload(BaseModel):
     closed_hand_declared: bool = False
     triple_fan_dice: Optional[int] = None
     dealer_win_streak: int = 0
+    winning_tile_from_east_discard: bool = False
 
 
 class ScoreRequest(BaseModel):

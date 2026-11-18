@@ -3,8 +3,9 @@ Glue layer between "reviewed tile data" (what the app's review screen +
 questionnaire produce, as plain JSON-friendly dicts) and the rule engine's
 typed HandInput/WinContext/score_hand API.
 
-This is the integration point between the detection pipeline and the rule
-engine: pipeline.py already does detector -> classifier -> TileGuess list; this module is what
+This is the integration point flagged as missing in
+claude/rule-engine-implementation.md's "Suggested next steps" -- pipeline.py
+already does detector -> classifier -> TileGuess list; this module is what
 turns a *user-confirmed* version of that (plus the WinContext questionnaire
 answers) into something score_hand() can consume. It's deliberately
 dict-in/dict-out so the FastAPI layer (api/main.py) can pass request JSON
@@ -73,6 +74,7 @@ def _context_from_dict(d: dict[str, Any]) -> WinContext:
         closed_hand_declared=bool(d.get("closed_hand_declared", False)),
         triple_fan_dice=d.get("triple_fan_dice"),
         dealer_win_streak=int(d.get("dealer_win_streak", 0)),
+        winning_tile_from_east_discard=bool(d.get("winning_tile_from_east_discard", False)),
     )
 
 
@@ -96,6 +98,7 @@ def score_result_to_dict(result: ScoreResult) -> dict[str, Any]:
         "is_chicken_hand": result.is_chicken_hand,
         "ruleset": result.ruleset,
         "notes": result.notes,
+        "declare_threshold": result.declare_threshold,
         "breakdown": result.breakdown(),
     }
 
